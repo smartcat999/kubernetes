@@ -22,7 +22,9 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/client-go/util/pki"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -169,6 +171,15 @@ func dataFromSliceOrFile(data []byte, file string) ([]byte, error) {
 		if err != nil {
 			return []byte{}, err
 		}
+
+		// add KEYPASS flags
+		encKey := os.Getenv("KEY_PASS")
+		if encKey != "" {
+			if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(fileData, encKey); err == nil {
+				fileData = pki.ParseRSAPrivateKeyToMemory(pkey)
+			}
+		}
+
 		return fileData, nil
 	}
 	return nil, nil
@@ -273,7 +284,27 @@ func (c *certificateCacheEntry) isStale() bool {
 }
 
 func newCertificateCacheEntry(certFile, keyFile string) certificateCacheEntry {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	//cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	var cert = tls.Certificate{}
+
+	certPEMBlock, err := os.ReadFile(certFile)
+	if err != nil {
+		return certificateCacheEntry{cert: &cert, err: err, birth: time.Now()}
+	}
+	keyPEMBlock, err := os.ReadFile(keyFile)
+	if err != nil {
+		return certificateCacheEntry{cert: &cert, err: err, birth: time.Now()}
+	}
+	// add KEYPASS flags
+	encKey := os.Getenv("KEY_PASS")
+	if encKey != "" {
+		if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(keyPEMBlock, encKey); err == nil {
+			keyPEMBlock = pki.ParseRSAPrivateKeyToMemory(pkey)
+		}
+	}
+
+	cert, err = tls.X509KeyPair(certPEMBlock, keyPEMBlock)
+
 	return certificateCacheEntry{cert: &cert, err: err, birth: time.Now()}
 }
 

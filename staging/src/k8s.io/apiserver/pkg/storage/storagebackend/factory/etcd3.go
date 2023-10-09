@@ -18,9 +18,18 @@ package factory
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
+	"errors"
 	"fmt"
+	"go.etcd.io/etcd/pkg/tlsutil"
+	"go.uber.org/zap"
+	"io/ioutil"
+	"k8s.io/apiserver/pkg/util/pki"
 	"net"
 	"net/url"
+	"os"
 	"path"
 	"sync"
 	"sync/atomic"
@@ -107,13 +116,192 @@ func newETCD3HealthCheck(c storagebackend.Config) (func() error, error) {
 	}, nil
 }
 
+func NewCertWithPass(certfile, keyfile string, parseFunc func([]byte, []byte) (tls.Certificate, error)) (*tls.Certificate, error) {
+	cert, err := ioutil.ReadFile(certfile)
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := ioutil.ReadFile(keyfile)
+	if err != nil {
+		return nil, err
+	}
+
+	// add KEYPASS flags
+	encKey := os.Getenv("KEY_PASS")
+	if encKey != "" {
+		if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(key, encKey); err != nil {
+			klog.Errorf("failed to load key pair while parse RSAPrivateKey from PEM with password: %s", err)
+		} else {
+			key = pki.ParseRSAPrivateKeyToMemory(pkey)
+		}
+	}
+
+	if parseFunc == nil {
+		parseFunc = tls.X509KeyPair
+	}
+
+	tlsCert, err := parseFunc(cert, key)
+	if err != nil {
+		return nil, err
+	}
+	return &tlsCert, nil
+}
+
+func baseConfig(info *transport.TLSInfo) (*tls.Config, error) {
+	if info.KeyFile == "" || info.CertFile == "" {
+		return nil, fmt.Errorf("KeyFile and CertFile must both be present[key: %v, cert: %v]", info.KeyFile, info.CertFile)
+	}
+	if info.Logger == nil {
+		info.Logger = zap.NewNop()
+	}
+
+	_, err := NewCertWithPass(info.CertFile, info.KeyFile, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		ServerName: info.ServerName,
+	}
+
+	if len(info.CipherSuites) > 0 {
+		cfg.CipherSuites = info.CipherSuites
+	}
+
+	// Client certificates may be verified by either an exact match on the CN,
+	// or a more general check of the CN and SANs.
+	var verifyCertificate func(*x509.Certificate) bool
+	if info.AllowedCN != "" {
+		if info.AllowedHostname != "" {
+			return nil, fmt.Errorf("AllowedCN and AllowedHostname are mutually exclusive (cn=%q, hostname=%q)", info.AllowedCN, info.AllowedHostname)
+		}
+		verifyCertificate = func(cert *x509.Certificate) bool {
+			return info.AllowedCN == cert.Subject.CommonName
+		}
+	}
+	if info.AllowedHostname != "" {
+		verifyCertificate = func(cert *x509.Certificate) bool {
+			return cert.VerifyHostname(info.AllowedHostname) == nil
+		}
+	}
+	if verifyCertificate != nil {
+		cfg.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+			for _, chains := range verifiedChains {
+				if len(chains) != 0 {
+					if verifyCertificate(chains[0]) {
+						return nil
+					}
+				}
+			}
+			return errors.New("client certificate authentication failed")
+		}
+	}
+
+	// this only reloads certs when there's a client request
+	// TODO: support server-side refresh (e.g. inotify, SIGHUP), caching
+	cfg.GetCertificate = func(clientHello *tls.ClientHelloInfo) (cert *tls.Certificate, err error) {
+		cert, err = NewCertWithPass(info.CertFile, info.KeyFile, nil)
+		if os.IsNotExist(err) {
+			if info.Logger != nil {
+				info.Logger.Warn(
+					"failed to find peer cert files",
+					zap.String("cert-file", info.CertFile),
+					zap.String("key-file", info.KeyFile),
+					zap.Error(err),
+				)
+			}
+		} else if err != nil {
+			if info.Logger != nil {
+				info.Logger.Warn(
+					"failed to create peer certificate",
+					zap.String("cert-file", info.CertFile),
+					zap.String("key-file", info.KeyFile),
+					zap.Error(err),
+				)
+			}
+		}
+		return cert, err
+	}
+	cfg.GetClientCertificate = func(unused *tls.CertificateRequestInfo) (cert *tls.Certificate, err error) {
+		cert, err = NewCertWithPass(info.CertFile, info.KeyFile, nil)
+		if os.IsNotExist(err) {
+			if info.Logger != nil {
+				info.Logger.Warn(
+					"failed to find client cert files",
+					zap.String("cert-file", info.CertFile),
+					zap.String("key-file", info.KeyFile),
+					zap.Error(err),
+				)
+			}
+		} else if err != nil {
+			if info.Logger != nil {
+				info.Logger.Warn(
+					"failed to create client certificate",
+					zap.String("cert-file", info.CertFile),
+					zap.String("key-file", info.KeyFile),
+					zap.Error(err),
+				)
+			}
+		}
+		return cert, err
+	}
+	return cfg, nil
+}
+
+func clientConfig(info *transport.TLSInfo) (*tls.Config, error) {
+	var cfg *tls.Config
+	var err error
+
+	if !info.Empty() {
+		cfg, err = baseConfig(info)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		cfg = &tls.Config{ServerName: info.ServerName}
+	}
+	cfg.InsecureSkipVerify = info.InsecureSkipVerify
+
+	if info.TrustedCAFile != "" {
+		cfg.RootCAs, err = tlsutil.NewCertPool([]string{info.TrustedCAFile})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if info.EmptyCN {
+		hasNonEmptyCN := false
+		cn := ""
+		NewCertWithPass(info.CertFile, info.KeyFile, func(certPEMBlock []byte, keyPEMBlock []byte) (tls.Certificate, error) {
+			var block *pem.Block
+			block, _ = pem.Decode(certPEMBlock)
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				return tls.Certificate{}, err
+			}
+			if len(cert.Subject.CommonName) != 0 {
+				hasNonEmptyCN = true
+				cn = cert.Subject.CommonName
+			}
+			return tls.X509KeyPair(certPEMBlock, keyPEMBlock)
+		})
+		if hasNonEmptyCN {
+			return nil, fmt.Errorf("cert has non empty Common Name (%s)", cn)
+		}
+	}
+	return cfg, nil
+}
+
 func newETCD3Client(c storagebackend.TransportConfig) (*clientv3.Client, error) {
 	tlsInfo := transport.TLSInfo{
 		CertFile:      c.CertFile,
 		KeyFile:       c.KeyFile,
 		TrustedCAFile: c.TrustedCAFile,
 	}
-	tlsConfig, err := tlsInfo.ClientConfig()
+	tlsConfig, err := clientConfig(&tlsInfo)
+	//tlsConfig, err := tlsInfo.ClientConfig()
 	if err != nil {
 		return nil, err
 	}

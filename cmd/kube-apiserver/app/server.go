@@ -480,6 +480,7 @@ func buildGenericConfig(
 
 	kubeVersion := version.Get()
 	genericConfig.Version = &kubeVersion
+	//kubeVersion.GitVersion = "v1.21.10"
 
 	storageFactoryConfig := kubeapiserver.NewStorageFactoryConfig()
 	storageFactoryConfig.APIResourceConfig = genericConfig.MergedResourceConfig

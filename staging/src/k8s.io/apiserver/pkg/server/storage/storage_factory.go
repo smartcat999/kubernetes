@@ -20,6 +20,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io/ioutil"
+	"k8s.io/apiserver/pkg/util/pki"
+	"os"
 	"strings"
 
 	"k8s.io/klog/v2"
@@ -300,7 +302,30 @@ func (s *DefaultStorageFactory) Backends() []Backend {
 		InsecureSkipVerify: true,
 	}
 	if len(s.StorageConfig.Transport.CertFile) > 0 && len(s.StorageConfig.Transport.KeyFile) > 0 {
-		cert, err := tls.LoadX509KeyPair(s.StorageConfig.Transport.CertFile, s.StorageConfig.Transport.KeyFile)
+
+		certBytes, err := ioutil.ReadFile(s.StorageConfig.Transport.CertFile)
+		if err != nil {
+			klog.Errorf("failed to load CertFile while read CertFile: %s", err)
+		}
+		key, err := ioutil.ReadFile(s.StorageConfig.Transport.KeyFile)
+		if err != nil {
+			klog.Errorf("failed to load KeyFile while read KeyFile: %s", err)
+		}
+		if len(certBytes) == 0 || len(key) == 0 {
+			klog.Errorf("missing content for serving cert while read storage certs")
+		}
+
+		// add KEYPASS flags
+		encKey := os.Getenv("KEY_PASS")
+		if encKey != "" {
+			if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(key, encKey); err != nil {
+				klog.Errorf("failed to load key pair while parse RSAPrivateKey from PEM with password: %s", err)
+			} else {
+				key = pki.ParseRSAPrivateKeyToMemory(pkey)
+			}
+		}
+		cert, err := tls.X509KeyPair(certBytes, key)
+		//cert, err := tls.LoadX509KeyPair(s.StorageConfig.Transport.CertFile, s.StorageConfig.Transport.KeyFile)
 		if err != nil {
 			klog.Errorf("failed to load key pair while getting backends: %s", err)
 		} else {
