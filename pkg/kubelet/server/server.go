@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -165,7 +166,12 @@ func ListenAndServeKubeletServer(
 		s.TLSConfig = &tls.Config{
 			Certificates: []tls.Certificate{sCert},
 		}
-		var listener net.Listener
+		listener, _, err := genericoptions.CreateListener("tcp4", s.Addr, net.ListenConfig{})
+		if err != nil {
+			klog.Fatal(err)
+		}
+		listener = tls.NewListener(listener, s.TLSConfig)
+
 		c, err := listener.Accept()
 		if err != nil {
 			klog.Fatal(err)
