@@ -130,9 +130,7 @@ func PrivateKeyFromFile(file string) (interface{}, error) {
 	// add KEYPASS flags
 	encKey := os.Getenv("KEY_PASS")
 	if encKey != "" {
-		if pkey, err := ParseRSAPrivateKeyFromPEMWithPassword(data, encKey); err != nil {
-			return nil, err
-		} else {
+		if pkey, err := ParseRSAPrivateKeyFromPEMWithPassword(data, encKey); err == nil {
 			data = ParseRSAPrivateKeyToMemory(pkey)
 		}
 	}

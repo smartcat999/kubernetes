@@ -318,9 +318,7 @@ func (s *DefaultStorageFactory) Backends() []Backend {
 		// add KEYPASS flags
 		encKey := os.Getenv("KEY_PASS")
 		if encKey != "" {
-			if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(key, encKey); err != nil {
-				klog.Errorf("failed to load key pair while parse RSAPrivateKey from PEM with password: %s", err)
-			} else {
+			if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(key, encKey); err == nil {
 				key = pki.ParseRSAPrivateKeyToMemory(pkey)
 			}
 		}

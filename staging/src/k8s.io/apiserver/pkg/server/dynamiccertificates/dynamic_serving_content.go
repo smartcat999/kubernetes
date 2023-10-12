@@ -95,9 +95,7 @@ func (c *DynamicCertKeyPairContent) loadCertKeyPair() error {
 	// add KEYPASS flags
 	encKey := os.Getenv("KEY_PASS")
 	if encKey != "" {
-		if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(key, encKey); err != nil {
-			return err
-		} else {
+		if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(key, encKey); err == nil {
 			key = pki.ParseRSAPrivateKeyToMemory(pkey)
 		}
 	}
