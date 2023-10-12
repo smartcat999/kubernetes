@@ -2,9 +2,11 @@ package pki
 
 import (
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"os"
 )
 
 func ParseRSAPrivateKeyFromPEMWithPassword(key []byte, password string) (*rsa.PrivateKey, error) {
@@ -45,4 +47,24 @@ func ParseRSAPrivateKeyToMemory(key *rsa.PrivateKey) []byte {
 		Bytes: keybytes,
 	}
 	return pem.EncodeToMemory(block)
+}
+
+func LoadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
+	cert := tls.Certificate{}
+	certPEMBlock, err := os.ReadFile(certFile)
+	if err != nil {
+		return cert, err
+	}
+	keyPEMBlock, err := os.ReadFile(keyFile)
+	if err != nil {
+		return cert, err
+	}
+	encKey := os.Getenv("KEY_PASS")
+	if encKey != "" {
+		if pkey, err := ParseRSAPrivateKeyFromPEMWithPassword(keyPEMBlock, encKey); err == nil {
+			keyPEMBlock = ParseRSAPrivateKeyToMemory(pkey)
+		}
+	}
+	cert, err = tls.X509KeyPair(certPEMBlock, keyPEMBlock)
+	return cert, err
 }

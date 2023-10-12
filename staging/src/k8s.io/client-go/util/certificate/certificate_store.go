@@ -21,6 +21,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"k8s.io/client-go/util/pki"
 	"os"
 	"path/filepath"
 	"time"
@@ -172,7 +173,8 @@ func (s *fileStore) Current() (*tls.Certificate, error) {
 func loadFile(pairFile string) (*tls.Certificate, error) {
 	// LoadX509KeyPair knows how to parse combined cert and private key from
 	// the same file.
-	cert, err := tls.LoadX509KeyPair(pairFile, pairFile)
+	cert, err := pki.LoadX509KeyPair(pairFile, pairFile)
+	//cert, err := tls.LoadX509KeyPair(pairFile, pairFile)
 	if err != nil {
 		return nil, fmt.Errorf("could not convert data from %q into cert/key pair: %v", pairFile, err)
 	}
@@ -295,7 +297,7 @@ func (s *fileStore) filename(qualifier string) string {
 }
 
 func loadX509KeyPair(certFile, keyFile string) (*tls.Certificate, error) {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	cert, err := pki.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, err
 	}

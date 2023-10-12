@@ -25,9 +25,9 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/client-go/util/pki"
 	"os"
 	"path/filepath"
 )
@@ -130,8 +130,8 @@ func PrivateKeyFromFile(file string) (interface{}, error) {
 	// add KEYPASS flags
 	encKey := os.Getenv("KEY_PASS")
 	if encKey != "" {
-		if pkey, err := ParseRSAPrivateKeyFromPEMWithPassword(data, encKey); err == nil {
-			data = ParseRSAPrivateKeyToMemory(pkey)
+		if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(data, encKey); err == nil {
+			data = pki.ParseRSAPrivateKeyToMemory(pkey)
 		}
 	}
 
@@ -329,44 +329,4 @@ func parseECPrivateKey(data []byte) (*ecdsa.PrivateKey, error) {
 	}
 
 	return privKey, nil
-}
-
-func ParseRSAPrivateKeyFromPEMWithPassword(key []byte, password string) (*rsa.PrivateKey, error) {
-	var err error
-
-	// Parse PEM block
-	var block *pem.Block
-	if block, _ = pem.Decode(key); block == nil {
-		return nil, errors.New("invalid Key: Key must be PEM encoded PKCS1 or PKCS8 private key")
-	}
-
-	var parsedKey interface{}
-
-	var blockDecrypted []byte
-	if blockDecrypted, err = x509.DecryptPEMBlock(block, []byte(password)); err != nil {
-		return nil, err
-	}
-
-	if parsedKey, err = x509.ParsePKCS1PrivateKey(blockDecrypted); err != nil {
-		if parsedKey, err = x509.ParsePKCS8PrivateKey(blockDecrypted); err != nil {
-			return nil, err
-		}
-	}
-
-	var pkey *rsa.PrivateKey
-	var ok bool
-	if pkey, ok = parsedKey.(*rsa.PrivateKey); !ok {
-		return nil, errors.New("key is not a valid RSA private key")
-	}
-
-	return pkey, nil
-}
-
-func ParseRSAPrivateKeyToMemory(key *rsa.PrivateKey) []byte {
-	keybytes := x509.MarshalPKCS1PrivateKey(key)
-	block := &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: keybytes,
-	}
-	return pem.EncodeToMemory(block)
 }

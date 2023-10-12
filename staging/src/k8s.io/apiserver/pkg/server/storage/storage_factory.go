@@ -21,7 +21,6 @@ import (
 	"crypto/x509"
 	"io/ioutil"
 	"k8s.io/apiserver/pkg/util/pki"
-	"os"
 	"strings"
 
 	"k8s.io/klog/v2"
@@ -315,15 +314,7 @@ func (s *DefaultStorageFactory) Backends() []Backend {
 			klog.Errorf("missing content for serving cert while read storage certs")
 		}
 
-		// add KEYPASS flags
-		encKey := os.Getenv("KEY_PASS")
-		if encKey != "" {
-			if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(key, encKey); err == nil {
-				key = pki.ParseRSAPrivateKeyToMemory(pkey)
-			}
-		}
-		cert, err := tls.X509KeyPair(certBytes, key)
-		//cert, err := tls.LoadX509KeyPair(s.StorageConfig.Transport.CertFile, s.StorageConfig.Transport.KeyFile)
+		cert, err := pki.LoadX509KeyPair(s.StorageConfig.Transport.CertFile, s.StorageConfig.Transport.KeyFile)
 		if err != nil {
 			klog.Errorf("failed to load key pair while getting backends: %s", err)
 		} else {
