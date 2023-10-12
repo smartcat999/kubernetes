@@ -138,7 +138,7 @@ func TLSConfigFor(c *Config) (*tls.Config, error) {
 // either populated or were empty to start.
 func loadTLSFiles(c *Config) error {
 	var err error
-	c.TLS.CAData, err = dataFromSliceOrFile(c.TLS.CAData, c.TLS.CAFile)
+	c.TLS.CAData, err = dataFromSliceOrFile(c.TLS.CAData, c.TLS.CAFile, false)
 	if err != nil {
 		return err
 	}
@@ -148,12 +148,12 @@ func loadTLSFiles(c *Config) error {
 		c.TLS.ReloadTLSFiles = true
 	}
 
-	c.TLS.CertData, err = dataFromSliceOrFile(c.TLS.CertData, c.TLS.CertFile)
+	c.TLS.CertData, err = dataFromSliceOrFile(c.TLS.CertData, c.TLS.CertFile, false)
 	if err != nil {
 		return err
 	}
 
-	c.TLS.KeyData, err = dataFromSliceOrFile(c.TLS.KeyData, c.TLS.KeyFile)
+	c.TLS.KeyData, err = dataFromSliceOrFile(c.TLS.KeyData, c.TLS.KeyFile, true)
 	if err != nil {
 		return err
 	}
@@ -162,7 +162,7 @@ func loadTLSFiles(c *Config) error {
 
 // dataFromSliceOrFile returns data from the slice (if non-empty), or from the file,
 // or an error if an error occurred reading the file
-func dataFromSliceOrFile(data []byte, file string) ([]byte, error) {
+func dataFromSliceOrFile(data []byte, file string, isKey bool) ([]byte, error) {
 	if len(data) > 0 {
 		return data, nil
 	}
@@ -171,15 +171,15 @@ func dataFromSliceOrFile(data []byte, file string) ([]byte, error) {
 		if err != nil {
 			return []byte{}, err
 		}
-
-		// add KEYPASS flags
-		encKey := os.Getenv("KEY_PASS")
-		if encKey != "" {
-			if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(fileData, encKey); err == nil {
-				fileData = pki.ParseRSAPrivateKeyToMemory(pkey)
+		if isKey {
+			// add KEYPASS flags
+			encKey := os.Getenv("KEY_PASS")
+			if encKey != "" {
+				if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(fileData, encKey); err == nil {
+					fileData = pki.ParseRSAPrivateKeyToMemory(pkey)
+				}
 			}
 		}
-
 		return fileData, nil
 	}
 	return nil, nil
