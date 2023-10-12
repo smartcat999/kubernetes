@@ -57,6 +57,7 @@ import (
 	"k8s.io/apiserver/pkg/server/routes"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/apiserver/pkg/util/flushwriter"
+	"k8s.io/apiserver/pkg/util/pki"
 	"k8s.io/component-base/configz"
 	"k8s.io/component-base/logs"
 	compbasemetrics "k8s.io/component-base/metrics"
@@ -157,14 +158,35 @@ func ListenAndServeKubeletServer(
 		MaxHeaderBytes: 1 << 20,
 	}
 	if tlsOptions != nil {
-		s.TLSConfig = tlsOptions.Config
-		// Passing empty strings as the cert and key files means no
-		// cert/keys are specified and GetCertificate in the TLSConfig
-		// should be called instead.
-		if err := s.ListenAndServeTLS(tlsOptions.CertFile, tlsOptions.KeyFile); err != nil {
+		sCert, err := pki.LoadX509KeyPair(tlsOptions.CertFile, tlsOptions.KeyFile)
+		if err != nil {
+			klog.Fatal(err)
+		}
+		s.TLSConfig = &tls.Config{
+			Certificates: []tls.Certificate{sCert},
+		}
+		var listener net.Listener
+		c, err := listener.Accept()
+		if err != nil {
+			klog.Fatal(err)
+		}
+		if tc, ok := c.(*net.TCPConn); ok {
+			tc.SetKeepAlive(true)
+			tc.SetKeepAlivePeriod(3 * time.Minute)
+		}
+		if err := s.Serve(listener); err != nil {
 			klog.ErrorS(err, "Failed to listen and serve")
 			os.Exit(1)
 		}
+
+		//s.TLSConfig = tlsOptions.Config
+		// Passing empty strings as the cert and key files means no
+		// cert/keys are specified and GetCertificate in the TLSConfig
+		// should be called instead.
+		//if err := s.ListenAndServeTLS(tlsOptions.CertFile, tlsOptions.KeyFile); err != nil {
+		//	klog.ErrorS(err, "Failed to listen and serve")
+		//	os.Exit(1)
+		//}
 	} else if err := s.ListenAndServe(); err != nil {
 		klog.ErrorS(err, "Failed to listen and serve")
 		os.Exit(1)
