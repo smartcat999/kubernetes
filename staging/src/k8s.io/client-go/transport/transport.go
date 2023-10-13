@@ -66,10 +66,11 @@ func TLSConfigFor(c *Config) (*tls.Config, error) {
 	if c.HasCA() && c.TLS.Insecure {
 		return nil, fmt.Errorf("specifying a root certificates file with the insecure flag is not allowed")
 	}
+	fmt.Printf("----loadTLSFiles----begin:\n%v\n%v", c.TLS.CAFile, c.TLS.CertFile)
 	if err := loadTLSFiles(c); err != nil {
 		return nil, err
 	}
-
+	fmt.Printf("----loadTLSFiles----over:\n%v\n%v", c.TLS.CAData, c.TLS.CertData)
 	tlsConfig := &tls.Config{
 		// Can't use SSLv3 because of POODLE and BEAST
 		// Can't use TLSv1.0 because of POODLE and BEAST using CBC cipher
@@ -164,11 +165,13 @@ func loadTLSFiles(c *Config) error {
 // or an error if an error occurred reading the file
 func dataFromSliceOrFile(data []byte, file string, isKey bool) ([]byte, error) {
 	if len(data) > 0 {
+		fmt.Printf("dataFromSliceOrFile cache----:\n%v--%v", file, isKey)
 		return data, nil
 	}
 	if len(file) > 0 {
 		fileData, err := ioutil.ReadFile(file)
 		if err != nil {
+			fmt.Printf("dataFromSliceOrFile readfile err----:\n%v--%v--\n%v", file, isKey, err)
 			return []byte{}, err
 		}
 		if isKey {
@@ -180,6 +183,7 @@ func dataFromSliceOrFile(data []byte, file string, isKey bool) ([]byte, error) {
 				}
 			}
 		}
+		fmt.Printf("dataFromSliceOrFile readfile----:\n%v--%v", file, isKey)
 		return fileData, nil
 	}
 	return nil, nil
