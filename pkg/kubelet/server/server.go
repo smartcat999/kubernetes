@@ -21,7 +21,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	genericoptions "k8s.io/apiserver/pkg/server/options"
+	"k8s.io/apiserver/pkg/util/pki"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -58,7 +58,6 @@ import (
 	"k8s.io/apiserver/pkg/server/routes"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/apiserver/pkg/util/flushwriter"
-	"k8s.io/apiserver/pkg/util/pki"
 	"k8s.io/component-base/configz"
 	"k8s.io/component-base/logs"
 	compbasemetrics "k8s.io/component-base/metrics"
@@ -163,24 +162,11 @@ func ListenAndServeKubeletServer(
 		if err != nil {
 			klog.Fatal(err)
 		}
-		s.TLSConfig = &tls.Config{
-			Certificates: []tls.Certificate{sCert},
-		}
-		listener, _, err := genericoptions.CreateListener("tcp4", s.Addr, net.ListenConfig{})
-		if err != nil {
-			klog.Fatal(err)
-		}
-		listener = tls.NewListener(listener, s.TLSConfig)
+		tlsOptions.Config.Certificates = []tls.Certificate{sCert}
+		s.TLSConfig = tlsOptions.Config
 
-		c, err := listener.Accept()
+		err = s.ListenAndServeTLS("", "")
 		if err != nil {
-			klog.Fatal(err)
-		}
-		if tc, ok := c.(*net.TCPConn); ok {
-			tc.SetKeepAlive(true)
-			tc.SetKeepAlivePeriod(3 * time.Minute)
-		}
-		if err := s.Serve(listener); err != nil {
 			klog.ErrorS(err, "Failed to listen and serve")
 			os.Exit(1)
 		}
