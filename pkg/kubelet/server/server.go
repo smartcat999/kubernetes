@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -163,28 +162,14 @@ func ListenAndServeKubeletServer(
 		if err != nil {
 			klog.Fatal(err)
 		}
-		s.TLSConfig = &tls.Config{
-			Certificates: []tls.Certificate{sCert},
-		}
-		listener, _, err := genericoptions.CreateListener("tcp4", s.Addr, net.ListenConfig{})
-		if err != nil {
-			klog.Fatal(err)
-		}
-		listener = tls.NewListener(listener, s.TLSConfig)
+		tlsOptions.Config.Certificates = []tls.Certificate{sCert}
+		s.TLSConfig = tlsOptions.Config
 
-		c, err := listener.Accept()
+		err = s.ListenAndServeTLS("", "")
 		if err != nil {
-			klog.Fatal(err)
-		}
-		if tc, ok := c.(*net.TCPConn); ok {
-			tc.SetKeepAlive(true)
-			tc.SetKeepAlivePeriod(3 * time.Minute)
-		}
-		if err := s.Serve(listener); err != nil {
 			klog.ErrorS(err, "Failed to listen and serve")
 			os.Exit(1)
 		}
-
 		//s.TLSConfig = tlsOptions.Config
 		// Passing empty strings as the cert and key files means no
 		// cert/keys are specified and GetCertificate in the TLSConfig
