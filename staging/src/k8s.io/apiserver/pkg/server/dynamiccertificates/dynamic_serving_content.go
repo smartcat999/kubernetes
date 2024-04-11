@@ -20,13 +20,12 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
-	"k8s.io/apiserver/pkg/util/pki"
-	"os"
 	"sync/atomic"
 	"time"
 
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apiserver/pkg/util/pki"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 )
@@ -93,11 +92,8 @@ func (c *DynamicCertKeyPairContent) loadCertKeyPair() error {
 	}
 
 	// add KEYPASS flags
-	encKey := os.Getenv("KEY_PASS")
-	if encKey != "" {
-		if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(key, encKey); err == nil {
-			key = pki.ParseRSAPrivateKeyToMemory(pkey)
-		}
+	if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(key); err == nil && pkey != nil {
+		key = pki.ParseRSAPrivateKeyToMemory(pkey)
 	}
 
 	// Ensure that the key matches the cert and both are valid

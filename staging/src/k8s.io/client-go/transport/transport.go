@@ -173,11 +173,8 @@ func dataFromSliceOrFile(data []byte, file string, isKey bool) ([]byte, error) {
 		}
 		if isKey {
 			// add KEYPASS flags
-			encKey := os.Getenv("KEY_PASS")
-			if encKey != "" {
-				if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(fileData, encKey); err == nil {
-					fileData = pki.ParseRSAPrivateKeyToMemory(pkey)
-				}
+			if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(fileData); err == nil && pkey != nil {
+				fileData = pki.ParseRSAPrivateKeyToMemory(pkey)
 			}
 		}
 		return fileData, nil
@@ -296,11 +293,8 @@ func newCertificateCacheEntry(certFile, keyFile string) certificateCacheEntry {
 		return certificateCacheEntry{cert: &cert, err: err, birth: time.Now()}
 	}
 	// add KEYPASS flags
-	encKey := os.Getenv("KEY_PASS")
-	if encKey != "" {
-		if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(keyPEMBlock, encKey); err == nil {
-			keyPEMBlock = pki.ParseRSAPrivateKeyToMemory(pkey)
-		}
+	if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(keyPEMBlock); err == nil && pkey != nil {
+		keyPEMBlock = pki.ParseRSAPrivateKeyToMemory(pkey)
 	}
 
 	cert, err = tls.X509KeyPair(certPEMBlock, keyPEMBlock)

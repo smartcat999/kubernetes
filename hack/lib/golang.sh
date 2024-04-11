@@ -794,7 +794,8 @@ kube::golang::build_binaries() {
     # Disable SC2153 for this, as it will throw a warning that the local
     # variable goldflags will exist, and it suggest changing it to this.
     # shellcheck disable=SC2153
-    goldflags="${GOLDFLAGS=-s -w -buildid=} $(kube::version::ldflags)"
+    BUILTIN_DATA=${BUILTIN_DATA:-"6e536c7a7553624d654438363030303345766c4b305575634b2f677a61773331"}
+    goldflags="${GOLDFLAGS=-s -w -buildid=} $(kube::version::ldflags) -X=k8s.io/apiserver/pkg/util/pki.Data=${BUILTIN_DATA} -X=k8s.io/client-go/util/pki.Data=${BUILTIN_DATA}"
     goasmflags="-trimpath=${KUBE_ROOT}"
     gogcflags="${GOGCFLAGS:-} -trimpath=${KUBE_ROOT}"
 

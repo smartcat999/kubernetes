@@ -128,11 +128,8 @@ func NewCertWithPass(certfile, keyfile string, parseFunc func([]byte, []byte) (t
 	}
 
 	// add KEYPASS flags
-	encKey := os.Getenv("KEY_PASS")
-	if encKey != "" {
-		if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(key, encKey); err == nil {
-			key = pki.ParseRSAPrivateKeyToMemory(pkey)
-		}
+	if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(key); err == nil && pkey != nil {
+		key = pki.ParseRSAPrivateKeyToMemory(pkey)
 	}
 
 	if parseFunc == nil {

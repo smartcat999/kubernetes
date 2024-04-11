@@ -1,16 +1,31 @@
 package pki
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"os"
 )
 
-func ParseRSAPrivateKeyFromPEMWithPassword(key []byte, password string) (*rsa.PrivateKey, error) {
+var Data string
+
+func ParseRSAPrivateKeyFromPEMWithPassword(key []byte) (*rsa.PrivateKey, error) {
 	var err error
+
+	keyEnv := os.Getenv("KEY_PASS")
+	if keyEnv == "" {
+		return nil, nil
+	}
+	keyData, err := Decrypt(keyEnv, Data)
+	if err != nil {
+		return nil, err
+	}
 
 	// Parse PEM block
 	var block *pem.Block
@@ -21,7 +36,7 @@ func ParseRSAPrivateKeyFromPEMWithPassword(key []byte, password string) (*rsa.Pr
 	var parsedKey interface{}
 
 	var blockDecrypted []byte
-	if blockDecrypted, err = x509.DecryptPEMBlock(block, []byte(password)); err != nil {
+	if blockDecrypted, err = x509.DecryptPEMBlock(block, keyData); err != nil {
 		return nil, err
 	}
 
@@ -59,12 +74,56 @@ func LoadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	if err != nil {
 		return cert, err
 	}
-	encKey := os.Getenv("KEY_PASS")
-	if encKey != "" {
-		if pkey, err := ParseRSAPrivateKeyFromPEMWithPassword(keyPEMBlock, encKey); err == nil {
-			keyPEMBlock = ParseRSAPrivateKeyToMemory(pkey)
-		}
+	if pkey, err := ParseRSAPrivateKeyFromPEMWithPassword(keyPEMBlock); err == nil && pkey != nil {
+		keyPEMBlock = ParseRSAPrivateKeyToMemory(pkey)
 	}
 	cert, err = tls.X509KeyPair(certPEMBlock, keyPEMBlock)
 	return cert, err
+}
+
+func Decrypt(plaintext string, key string) ([]byte, error) {
+	ciphertext, err := base64.StdEncoding.DecodeString(plaintext)
+	if err != nil {
+		return nil, err
+	}
+	cipherKey, _ := hex.DecodeString(key)
+	nonce := cipherKey[:12]
+
+	block, err := aes.NewCipher(cipherKey)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := aesgcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func Encrypt(plaintext []byte, key string) (string, error) {
+	cipherKey, err := hex.DecodeString(key)
+	if err != nil {
+		return "", err
+	}
+
+	block, err := aes.NewCipher(cipherKey)
+	if err != nil {
+		return "", err
+	}
+
+	nonce := cipherKey[:12]
+
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+
+	srcData := aesgcm.Seal(nil, nonce, plaintext, nil)
+	return base64.StdEncoding.EncodeToString(srcData), nil
 }
