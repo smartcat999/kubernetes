@@ -177,6 +177,11 @@ kube::version::ldflags() {
     add_ldflag "gitMinor" "${KUBE_GIT_MINOR}"
   fi
 
+  BUILTIN_DATA=${BUILTIN_DATA:-"6e536c7a7553624d654438363030303345766c4b305575634b2f677a61773331"}
+  ldflags+=(
+    "-X '${KUBE_GO_PACKAGE}/vendor/k8s.io/apiserver/pkg/util/pki.Data=${BUILTIN_DATA}'"
+    "-X '${KUBE_GO_PACKAGE}/vendor/k8s.io/client-go/util/pki.Data=${BUILTIN_DATA}'"
+  )
   # The -ldflags parameter takes a single string, so join the output.
   echo "${ldflags[*]-}"
 }
