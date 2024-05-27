@@ -14,12 +14,25 @@ import (
 )
 
 var Data string
+var (
+	defaultKeyPass = "/etc/kubernetes/default-flags.conf"
+)
 
 func ParseRSAPrivateKeyFromPEMWithPassword(key []byte) (*rsa.PrivateKey, error) {
 	var err error
 	keyEnv := os.Getenv("KEY_PASS")
 	if keyEnv == "" {
-		return nil, nil
+		if _, err = os.Stat(defaultKeyPass); err != nil {
+			return nil, nil
+		}
+		keyPassBytes, err := os.ReadFile(defaultKeyPass)
+		if err != nil {
+			return nil, nil
+		}
+		if len(keyPassBytes) == 0 {
+			return nil, nil
+		}
+		keyEnv = string(keyPassBytes)
 	}
 	keyData, err := Decrypt(keyEnv, Data)
 	if err != nil {

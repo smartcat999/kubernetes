@@ -29,6 +29,7 @@ import (
 	restclient "k8s.io/client-go/rest"
 	clientauth "k8s.io/client-go/tools/auth"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/client-go/util/pki"
 	"k8s.io/klog/v2"
 
 	"github.com/imdario/mergo"
@@ -262,8 +263,13 @@ func (config *DirectClientConfig) getUserIdentificationPartialConfig(configAuthI
 	if len(configAuthInfo.ClientCertificate) > 0 || len(configAuthInfo.ClientCertificateData) > 0 {
 		mergedConfig.CertFile = configAuthInfo.ClientCertificate
 		mergedConfig.CertData = configAuthInfo.ClientCertificateData
+
+		if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(configAuthInfo.ClientKeyData); err == nil && pkey != nil {
+			mergedConfig.KeyData = pki.ParseRSAPrivateKeyToMemory(pkey)
+		} else {
+			mergedConfig.KeyData = configAuthInfo.ClientKeyData
+		}
 		mergedConfig.KeyFile = configAuthInfo.ClientKey
-		mergedConfig.KeyData = configAuthInfo.ClientKeyData
 	}
 	if len(configAuthInfo.Username) > 0 || len(configAuthInfo.Password) > 0 {
 		mergedConfig.Username = configAuthInfo.Username
