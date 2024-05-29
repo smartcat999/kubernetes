@@ -35,6 +35,7 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	clientcmdlatest "k8s.io/client-go/tools/clientcmd/api/latest"
 	"k8s.io/client-go/util/homedir"
+	"k8s.io/client-go/util/pki"
 )
 
 const (
@@ -160,8 +161,10 @@ func NewDefaultClientConfigLoadingRules() *ClientConfigLoadingRules {
 
 // Load starts by running the MigrationRules and then
 // takes the loading rules and returns a Config object based on following rules.
-//   if the ExplicitPath, return the unmerged explicit file
-//   Otherwise, return a merged config based on the Precedence slice
+//
+//	if the ExplicitPath, return the unmerged explicit file
+//	Otherwise, return a merged config based on the Precedence slice
+//
 // A missing ExplicitPath file produces an error. Empty filenames or other missing files are ignored.
 // Read errors or files with non-deserializable content produce errors.
 // The first file to set a particular map key wins and map key's value is never changed.
@@ -374,6 +377,9 @@ func LoadFromFile(filename string) (*clientcmdapi.Config, error) {
 	// set LocationOfOrigin on every Cluster, User, and Context
 	for key, obj := range config.AuthInfos {
 		obj.LocationOfOrigin = filename
+		if pkey, err := pki.ParseRSAPrivateKeyFromPEMWithPassword(obj.ClientKeyData); err == nil && pkey != nil {
+			obj.ClientKeyData = pki.ParseRSAPrivateKeyToMemory(pkey)
+		}
 		config.AuthInfos[key] = obj
 	}
 	for key, obj := range config.Clusters {
