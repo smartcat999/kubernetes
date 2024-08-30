@@ -19,6 +19,7 @@ package flag
 import (
 	"crypto/tls"
 	"fmt"
+	"k8s.io/klog/v2"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -106,6 +107,7 @@ func TLSCipherSuites(cipherNames []string) ([]uint16, error) {
 		if !ok {
 			return nil, fmt.Errorf("Cipher suite %s not supported or doesn't exist", cipher)
 		}
+		klog.Warningf("Find TLSCipherSuites from allCiphers %s: %d", cipher, intValue)
 		ciphersIntSlice = append(ciphersIntSlice, intValue)
 	}
 	return ciphersIntSlice, nil
