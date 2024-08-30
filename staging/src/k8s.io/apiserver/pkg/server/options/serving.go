@@ -26,7 +26,6 @@ import (
 	"syscall"
 
 	"github.com/spf13/pflag"
-	"k8s.io/klog/v2"
 	netutils "k8s.io/utils/net"
 
 	utilnet "k8s.io/apimachinery/pkg/util/net"
@@ -271,12 +270,14 @@ func (s *SecureServingOptions) ApplyTo(config **server.SecureServingInfo) error 
 		c.Cert = s.ServerCert.GeneratedCert
 	}
 
+	klog.Warningf("Load CipherSuites %s from config", s.CipherSuites)
 	if len(s.CipherSuites) != 0 {
 		cipherSuites, err := cliflag.TLSCipherSuites(s.CipherSuites)
 		if err != nil {
 			return err
 		}
 		c.CipherSuites = cipherSuites
+		klog.Warningf("Load CipherSuites %s from config", s.CipherSuites)
 	}
 
 	var err error
