@@ -31,6 +31,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/component-base/metrics"
 	"k8s.io/component-base/metrics/legacyregistry"
+	"k8s.io/klog/v2"
 )
 
 /*
@@ -150,6 +151,13 @@ func (a *Authenticator) AuthenticateRequest(req *http.Request) (*authenticator.R
 
 	remaining := req.TLS.PeerCertificates[0].NotAfter.Sub(time.Now())
 	clientCertificateExpirationHistogram.WithContext(req.Context()).Observe(remaining.Seconds())
+
+	if remaining < (7 * 24 * time.Hour) {
+		klog.Warningf("%s %s: [%s %s]: certificate expires in one week. Issuer: %s, Subject: %s, NotBefore: %s, NotAfter: %s",
+			req.Method, req.RequestURI, req.UserAgent(), req.RemoteAddr,
+			req.TLS.PeerCertificates[0].Issuer, req.TLS.PeerCertificates[0].Subject, req.TLS.PeerCertificates[0].NotBefore, req.TLS.PeerCertificates[0].NotAfter)
+	}
+
 	chains, err := req.TLS.PeerCertificates[0].Verify(optsCopy)
 	if err != nil {
 		return nil, false, fmt.Errorf(
