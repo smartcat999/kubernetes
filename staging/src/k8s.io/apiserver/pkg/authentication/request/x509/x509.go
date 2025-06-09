@@ -156,6 +156,11 @@ func (a *Authenticator) AuthenticateRequest(req *http.Request) (*authenticator.R
 		klog.Warningf("%s %s: [%s %s]: certificate expires in one week. Issuer: %s, Subject: %s, NotBefore: %s, NotAfter: %s",
 			req.Method, req.RequestURI, req.UserAgent(), req.RemoteAddr,
 			req.TLS.PeerCertificates[0].Issuer, req.TLS.PeerCertificates[0].Subject, req.TLS.PeerCertificates[0].NotBefore, req.TLS.PeerCertificates[0].NotAfter)
+	} else {
+		klog.Warningf("%s %s: [%s %s]: certificate expires in %v seconds. Issuer: %s, Subject: %s, NotBefore: %s, NotAfter: %s",
+			req.Method, req.RequestURI, req.UserAgent(), req.RemoteAddr,
+			remaining.Seconds(),
+			req.TLS.PeerCertificates[0].Issuer, req.TLS.PeerCertificates[0].Subject, req.TLS.PeerCertificates[0].NotBefore, req.TLS.PeerCertificates[0].NotAfter)
 	}
 
 	chains, err := req.TLS.PeerCertificates[0].Verify(optsCopy)
